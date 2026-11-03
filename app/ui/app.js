@@ -23,10 +23,40 @@ document.querySelectorAll("button.nav").forEach((button) => {
   });
 });
 
-async function loadMachines() {
+function fillMachineSelect(machines, selectedId) {
+  const select = document.querySelector("#run-form [name=id]");
+  const previous = selectedId ?? select.value;
+  select.replaceChildren();
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.disabled = true;
+  placeholder.textContent = machines.length === 0 ? "Save a host first" : "Select a saved host";
+  select.append(placeholder);
+  for (const machine of machines) {
+    const option = document.createElement("option");
+    option.value = machine.id;
+    option.textContent = `${machine.name} (${machine.username}@${machine.host}:${machine.port})`;
+    select.append(option);
+  }
+  if ([...select.options].some((option) => option.value === previous)) {
+    select.value = previous;
+  } else {
+    placeholder.selected = true;
+  }
+}
+
+function selectMachine(id) {
+  const select = document.querySelector("#run-form [name=id]");
+  if ([...select.options].some((option) => option.value === id)) {
+    select.value = id;
+  }
+}
+
+async function loadMachines(selectedId) {
   const list = document.querySelector("#machine-list");
   try {
     const machines = await invoke("list_machines");
+    fillMachineSelect(machines, selectedId);
     list.replaceChildren();
     if (machines.length === 0) {
       const empty = document.createElement("p");
@@ -36,14 +66,16 @@ async function loadMachines() {
       return;
     }
     for (const machine of machines) {
-      const card = document.createElement("div");
-      card.className = "card";
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "card pick";
       const title = document.createElement("strong");
       title.textContent = machine.name;
       const meta = document.createElement("p");
       meta.className = "mute";
       meta.textContent = `${machine.username}@${machine.host}:${machine.port} · ${machine.id}`;
       card.append(title, meta);
+      card.addEventListener("click", () => selectMachine(machine.id));
       list.append(card);
     }
   } catch (error) {
@@ -60,10 +92,12 @@ document.querySelector("#add-form").addEventListener("submit", async (event) => 
       name: data.get("name"),
       host: data.get("host"),
       username: data.get("username"),
+      port: Number(data.get("port")) || 22,
     });
     status.textContent = `Saved ${machine.id}`;
     event.currentTarget.reset();
-    await loadMachines();
+    event.currentTarget.port.value = "22";
+    await loadMachines(machine.id);
   } catch (error) {
     status.textContent = error instanceof Error ? error.message : String(error);
   }
@@ -71,6 +105,10 @@ document.querySelector("#add-form").addEventListener("submit", async (event) => 
 
 document.querySelector("#probe").addEventListener("click", async () => {
   const data = new FormData(document.querySelector("#run-form"));
+  if (!data.get("id")) {
+    show(new Error("Select a saved host first."));
+    return;
+  }
   try {
     output.textContent = await invoke("probe_machine", { id: data.get("id") });
   } catch (error) {

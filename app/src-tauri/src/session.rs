@@ -6,7 +6,6 @@ use termix_logging::redact;
 use termix_security::Vault;
 use termix_ssh::{Auth, ConnectRequest, SshError, SshSession};
 use termix_storage::{data_dir, Database};
-use uuid::Uuid;
 
 #[derive(serde::Serialize)]
 pub struct CommandOutput {
@@ -15,11 +14,8 @@ pub struct CommandOutput {
     pub exit_code: Option<u32>,
 }
 
-pub fn load(db: &Database, id: &str) -> Result<termix_core::Machine, String> {
-    let id = Uuid::parse_str(id).map_err(|_| format!("not a machine id: {id}"))?;
-    db.machine(id)
-        .map_err(|error| error.to_string())?
-        .ok_or_else(|| format!("no machine {id}"))
+pub fn load(db: &Database, id_or_name: &str) -> Result<termix_core::Machine, String> {
+    db.resolve(id_or_name).map_err(|error| error.to_string())
 }
 
 pub async fn run(

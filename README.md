@@ -52,6 +52,7 @@ app/                        Tauri shell (one UI for desktop and mobile)
 cargo test
 cargo run -p termix-cli -- support
 cargo run -p termix-cli -- machine add --name edge --host 10.0.0.8 --username ops
+cargo run -p termix-cli -- probe edge
 cargo run -p termix-cli -- local
 ```
 

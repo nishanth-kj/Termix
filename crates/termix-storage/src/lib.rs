@@ -78,6 +78,10 @@ pub enum StoreError {
     Crypto(#[from] termix_security::CryptoError),
     #[error("machine {0} was not found")]
     NotFound(Uuid),
+    #[error("no machine named {0}")]
+    UnknownName(String),
+    #[error("multiple machines named {0}; use the id")]
+    AmbiguousName(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -175,6 +179,34 @@ impl Database {
             Ok(Some(machine))
         } else {
             Ok(None)
+        }
+    }
+
+    /// Accept a UUID or a unique saved name. Names are matched case-insensitively.
+    pub fn resolve(&self, id_or_name: &str) -> Result<Machine, StoreError> {
+        let key = id_or_name.trim();
+        if key.is_empty() {
+            return Err(StoreError::UnknownName(key.to_string()));
+        }
+        if let Ok(id) = Uuid::parse_str(key) {
+            return self.machine(id)?.ok_or(StoreError::NotFound(id));
+        }
+        let conn = self.conn.lock().expect("database lock");
+        let mut stmt = conn.prepare(
+            "SELECT id, name, host, port, username, protocol, os_hint, favorite, notes, group_name, created_at, updated_at, last_connected_at
+             FROM machines WHERE name = ?1 COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map(params![key], map_machine)?;
+        let mut matches = Vec::new();
+        for row in rows {
+            let mut machine = row?;
+            machine.tags = tags_for(&conn, machine.id)?;
+            matches.push(machine);
+        }
+        match matches.len() {
+            0 => Err(StoreError::UnknownName(key.to_string())),
+            1 => Ok(matches.remove(0)),
+            _ => Err(StoreError::AmbiguousName(key.to_string())),
         }
     }
 
@@ -449,6 +481,25 @@ mod tests {
             db.trusted_fingerprint("10.0.0.8", 22).unwrap().as_deref(),
             Some("SHA256:abc")
         );
+        assert_eq!(db.resolve("EDGE").unwrap().id, created.id);
+        assert_eq!(db.resolve(&created.id.to_string()).unwrap().id, created.id);
+    }
+
+    #[test]
+    fn resolve_rejects_unknown_and_duplicate_names() {
+        let db = Database::open_in_memory().unwrap();
+        db.insert_machine(sample()).unwrap();
+        let mut twin = sample();
+        twin.host = "10.0.0.9".into();
+        db.insert_machine(twin).unwrap();
+        assert!(matches!(
+            db.resolve("missing"),
+            Err(StoreError::UnknownName(_))
+        ));
+        assert!(matches!(
+            db.resolve("edge"),
+            Err(StoreError::AmbiguousName(_))
+        ));
     }
 
     #[test]

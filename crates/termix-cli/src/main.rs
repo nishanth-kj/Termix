@@ -10,7 +10,6 @@ use termix_network::tcp_probe;
 use termix_security::Vault;
 use termix_ssh::{Auth, ConnectRequest, SshError, SshSession};
 use termix_storage::{data_dir, Database};
-use uuid::Uuid;
 
 #[derive(Parser)]
 #[command(name = "termix", version, about = "Every machine. One control center.")]
@@ -32,9 +31,13 @@ enum Command {
         action: MachineAction,
     },
     /// TCP connect check. This does not authenticate.
-    Probe { id: String },
+    Probe {
+        /// Saved machine id or unique name.
+        id: String,
+    },
     /// Run one remote command over SSH. Password is read from TERMIX_PASSWORD.
     Exec {
+        /// Saved machine id or unique name.
         id: String,
         /// Accept the presented host key. Refused if a different key was already trusted.
         #[arg(long)]
@@ -77,6 +80,7 @@ enum MachineAction {
     },
     List,
     Remove {
+        /// Saved machine id or unique name.
         id: String,
     },
 }
@@ -84,6 +88,7 @@ enum MachineAction {
 #[derive(Subcommand)]
 enum SftpAction {
     Ls {
+        /// Saved machine id or unique name.
         id: String,
         #[arg(long, default_value = ".")]
         path: String,
@@ -177,8 +182,8 @@ async fn run(dir: PathBuf, command: Command) -> Result<(), String> {
                 }
             }
             MachineAction::Remove { id } => {
-                let id = parse_id(&id)?;
-                db.delete_machine(id).map_err(|e| e.to_string())?;
+                let machine = load(&db, &id)?;
+                db.delete_machine(machine.id).map_err(|e| e.to_string())?;
             }
         },
         Command::Probe { id } => {
@@ -261,15 +266,8 @@ fn open_vault(dir: &Path) -> Result<Vault, String> {
     }
 }
 
-fn parse_id(id: &str) -> Result<Uuid, String> {
-    Uuid::parse_str(id).map_err(|_| format!("not a machine id: {id}"))
-}
-
-fn load(db: &Database, id: &str) -> Result<termix_core::Machine, String> {
-    let id = parse_id(id)?;
-    db.machine(id)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| format!("no machine {id}"))
+fn load(db: &Database, id_or_name: &str) -> Result<termix_core::Machine, String> {
+    db.resolve(id_or_name).map_err(|e| e.to_string())
 }
 
 async fn connect(

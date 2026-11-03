@@ -75,12 +75,13 @@ fn add_machine(
     name: String,
     host: String,
     username: String,
+    port: Option<u16>,
 ) -> Result<termix_core::Machine, String> {
     database()?
         .insert_machine(NewMachine {
             name,
             host,
-            port: 22,
+            port: port.unwrap_or(22),
             username,
             protocol: Protocol::Ssh,
             os_hint: None,

@@ -25,6 +25,15 @@ button.nav.active { background: #262c35; border-color: var(--line); }
 main { padding: 20px 24px; }
 h2 { font-size: 18px; margin: 0 0 12px; }
 .card { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+button.card.pick {
+  display: block; width: 100%; text-align: left; cursor: pointer; color: inherit;
+  margin-top: 0; margin-right: 0;
+}
+button.card.pick:hover, button.card.pick:focus-visible { border-color: var(--accent); }
+select {
+  width: 100%; margin-top: 4px; background: #121418; color: var(--text);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
 .mute { color: var(--mute); }
 .ok { color: var(--ok); }
 .bad { color: var(--bad); }
