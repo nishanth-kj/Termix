@@ -1,0 +1,8 @@
+name: Android bundle
+on:
+  workflow_dispatch:
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Android bundles require the SDK and NDK and are dispatched manually."

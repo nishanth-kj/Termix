@@ -1,0 +1,8 @@
+name: iOS bundle
+on:
+  workflow_dispatch:
+jobs:
+  note:
+    runs-on: macos-latest
+    steps:
+      - run: echo "iOS bundles require Xcode and are dispatched manually."

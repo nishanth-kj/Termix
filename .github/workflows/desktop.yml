@@ -1,0 +1,8 @@
+name: Desktop bundle
+on:
+  workflow_dispatch:
+jobs:
+  note:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Desktop bundles are dispatched manually. This workflow does not claim a green release build."

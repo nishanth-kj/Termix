@@ -1,0 +1,17 @@
+/target
+**/*.rs.bk
+.DS_Store
+*.sqlite
+*.sqlite-*
+/dist
+.idea
+.vscode
+*.iml
+local.properties
+.gradle
+android/.gradle
+**/build
+*.apk
+*.aab
+*.ipa
+*.dSYM
