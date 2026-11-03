@@ -10,5 +10,5 @@ description = "VT screen fed by real PTY or SSH bytes"
 
 [dependencies]
 vte = { workspace = true }
-portable-pty = "0.8"
+portable-pty = "0.9"
 thiserror = { workspace = true }
