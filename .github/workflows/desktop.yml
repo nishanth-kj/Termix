@@ -28,7 +28,7 @@ jobs:
       # Unsigned. Signing needs certificates this repository does not have.
       - run: cargo tauri build
         working-directory: app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: termix-${{ matrix.os }}
           path: |

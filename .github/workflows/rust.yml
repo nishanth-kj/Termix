@@ -51,7 +51,7 @@ jobs:
       - run: cargo build -p termix-session --example test_server
       - name: Drive the real window
         run: node scripts/e2e-windows.mts screenshots
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: e2e-screenshots
