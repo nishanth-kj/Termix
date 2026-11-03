@@ -29,7 +29,7 @@ jobs:
       # A debug build, signed with the throwaway debug key, so it installs but is not for release.
       - run: cargo tauri android build --debug --apk --ci
         working-directory: app
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: termix-android
           path: app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk
