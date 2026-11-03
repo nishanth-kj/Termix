@@ -5,4 +5,4 @@ jobs:
   note:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Android bundles require the SDK and NDK and are dispatched manually."
+      - run: echo "Android bundles use Tauri and require the SDK and NDK. They are dispatched manually."

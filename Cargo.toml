@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "app",
+    "app/src-tauri",
     "crates/termix-core",
     "crates/termix-logging",
     "crates/termix-security",

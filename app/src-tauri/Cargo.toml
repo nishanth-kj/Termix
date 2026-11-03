@@ -1,0 +1,33 @@
+[package]
+name = "termix-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Termix Tauri shell for Windows, macOS, iOS, and Android"
+
+[lib]
+name = "termix_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "termix-desktop"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+serde = { workspace = true }
+tauri = { version = "2.12", features = [] }
+uuid = { workspace = true }
+termix-automation = { path = "../../crates/termix-automation" }
+termix-core = { path = "../../crates/termix-core" }
+termix-logging = { path = "../../crates/termix-logging" }
+termix-monitor = { path = "../../crates/termix-monitor" }
+termix-network = { path = "../../crates/termix-network" }
+termix-security = { path = "../../crates/termix-security" }
+termix-ssh = { path = "../../crates/termix-ssh" }
+termix-storage = { path = "../../crates/termix-storage" }

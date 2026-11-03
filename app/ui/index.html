@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Termix</title>
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside>
+        <h1>Termix</h1>
+        <p>Every machine. One control center.</p>
+        <button class="nav active" data-tab="machines" type="button">Machines</button>
+        <button class="nav" data-tab="monitor" type="button">This machine</button>
+        <button class="nav" data-tab="support" type="button">What works</button>
+      </aside>
+      <main>
+        <section id="machines">
+          <h2>Machines</h2>
+          <p class="mute">Saved on this device. A TCP probe only means the port accepted a connection.</p>
+          <div id="machine-list"></div>
+          <form id="add-form" class="card">
+            <h2>Add a host</h2>
+            <label>Name <input name="name" required /></label>
+            <label>Host <input name="host" required /></label>
+            <label>Username <input name="username" required /></label>
+            <button type="submit">Save host</button>
+            <p id="add-status" class="mute"></p>
+          </form>
+          <form id="run-form" class="card">
+            <h2>Run a command</h2>
+            <label>Machine id <input name="id" required /></label>
+            <label>Command <input name="command" required value="uname -a" /></label>
+            <label>Password <input name="password" type="password" autocomplete="off" /></label>
+            <label class="check"><input name="trust" type="checkbox" /> Trust the host key after I have checked the fingerprint</label>
+            <label class="check"><input name="yes" type="checkbox" /> I intend to run a destructive command</label>
+            <button type="button" id="probe">Probe port</button>
+            <button type="submit">Run</button>
+            <pre id="output"></pre>
+          </form>
+        </section>
+        <section id="monitor" hidden>
+          <h2>This machine</h2>
+          <p class="mute">Numbers come from the operating system on this device.</p>
+          <div id="metrics" class="card"></div>
+        </section>
+        <section id="support" hidden>
+          <h2>What works</h2>
+          <p class="mute">Unfinished protocols stay on this list. They are not shown as connected.</p>
+          <div id="support-list"></div>
+        </section>
+      </main>
+    </div>
+    <script src="app.js"></script>
+  </body>
+</html>

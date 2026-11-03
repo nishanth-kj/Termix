@@ -1,7 +1,7 @@
 # Architecture
 
 ```
-Dioxus UI (Windows, macOS, iOS, Android)
+Tauri shell (Windows, macOS, iOS, Android)
         |
         v
 termix-cli / termix-ffi
@@ -14,6 +14,6 @@ termix-cli / termix-ffi
         +-- termix-terminal - VTE screen + local PTY
 ```
 
-The UI does not open its own sockets. A future mobile build calls the same crates; it does not grow a second SSH stack.
+The webview does not open its own sockets. Tauri commands call the same crates as the CLI. There is no second SSH stack for mobile.
 
-Dioxus renders with the operating system webview. The experimental Dioxus native renderer is not used.
+Tauri uses the operating system webview on every target.

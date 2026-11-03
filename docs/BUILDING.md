@@ -4,8 +4,9 @@ Requirements:
 
 - Rust 1.85 or newer (`rustup`).
 - A C compiler (SQLite is bundled).
-- For the desktop UI: the Dioxus CLI and a system webview.
-  - Linux: WebKitGTK (`libwebkit2gtk`).
+- Tauri CLI 2 for the window: `cargo install tauri-cli --version "^2" --locked`.
+- A system webview:
+  - Linux: WebKitGTK (`libwebkit2gtk-4.1`, GTK 3).
   - Windows: WebView2.
   - macOS: system WebKit.
 - iOS: macOS, Xcode, iOS SDK.
@@ -16,12 +17,14 @@ cargo test
 cargo build -p termix-cli
 ```
 
-UI:
+UI, from `app/`:
 
 ```bash
-cargo install dioxus-cli
-cd app
-dx serve --desktop
+cargo tauri dev
+cargo tauri android init
+cargo tauri ios init
+cargo tauri android dev
+cargo tauri ios dev
 ```
 
-`dx bundle` produces `.exe` / `.msi`, `.app` / `.dmg`, `.apk`, and an iOS `.app` when run on a machine with that SDK. This repository's CI compiles and tests the Rust crates. It does not claim to have produced store binaries.
+`cargo tauri build` produces the desktop bundle for the machine it runs on. Android and iOS bundles are produced only on a machine with those SDKs. CI compiles and tests the Rust crates. It does not claim to have produced store binaries.

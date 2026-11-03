@@ -7,5 +7,5 @@
 - SSH client that rejects unknown host keys.
 - SFTP file operations.
 - Local metrics and Linux `/proc` parsers.
-- Dioxus UI shared by desktop and mobile.
+- Tauri 2 shell shared by Windows, macOS, iOS, and Android.
 - `termix` CLI.

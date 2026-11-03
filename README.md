@@ -2,7 +2,7 @@
 
 Every machine. One control center.
 
-Termix is a remote-machine manager for Windows, macOS, iOS, and Android. The interface is one Rust codebase ([Dioxus](https://dioxuslabs.com/)). SSH, SFTP, encryption, and the local database are shared Rust crates. There is no separate Java, Swift, or Electron app.
+Termix is a remote-machine manager for Windows, macOS, iOS, and Android. The shell is [Tauri 2](https://v2.tauri.app/). SSH, SFTP, encryption, and the local database are shared Rust crates. There is no separate Java, Swift, or Electron app.
 
 Repository: https://github.com/nishanth-kj/Termix
 
@@ -20,7 +20,7 @@ Repository: https://github.com/nishanth-kj/Termix
 | Local metrics via sysinfo, Linux metrics parsed from real command output | Implemented |
 | Folder sync planner (no deletes applied) | Implemented |
 | CLI (`termix`) | Implemented |
-| Dioxus UI shell: machines, local metrics, support list | Implemented |
+| Tauri shell: machines, command, local metrics, support list | Implemented |
 | C ABI `termix_support_json` | Implemented |
 | Port forwarding, jump hosts, SOCKS, SSH agent | Not implemented |
 | Applying a sync plan | Not implemented |
@@ -43,7 +43,7 @@ crates/termix-sync          sync plans
 crates/termix-automation    destructive-command confirmation
 crates/termix-ffi           C ABI
 crates/termix-cli           `termix` binary
-app/                        Dioxus UI for desktop and mobile
+app/                        Tauri shell (one UI for desktop and mobile)
 ```
 
 ## Build
@@ -63,18 +63,20 @@ Destructive-looking commands (`rm`, `mkfs`, `kubectl delete`, …) require `--ye
 
 ### Desktop, iOS, and Android
 
-Install the Dioxus CLI, then from `app/`:
+The UI is one Tauri app. Install the Tauri CLI, then from `app/`:
 
 ```bash
-dx serve --desktop
-dx serve --android
-dx serve --ios
-dx bundle --desktop
-dx bundle --android
-dx bundle --ios
+cargo install tauri-cli --version "^2" --locked
+cargo tauri dev
+cargo tauri android init
+cargo tauri ios init
+cargo tauri android dev
+cargo tauri ios dev
 ```
 
-iOS builds require macOS and Xcode. Android builds require the Android SDK and NDK. Desktop builds use the platform webview (WebView2, WKWebView, WebKitGTK). That is how one UI reaches all four operating systems. Iced does not target iOS or Android, so it is not the UI.
+iOS builds require macOS and Xcode. Android builds require the Android SDK and NDK. Every target uses the system webview (WebView2, WKWebView, Android WebView, WebKitGTK). The Rust commands behind that window are the same on all four systems.
+
+Linux desktop builds need WebKitGTK (`libwebkit2gtk-4.1` and `libgtk-3`). This environment does not have those libraries, so the window was not launched here. The command crate still typechecks when those libraries are present.
 
 ## License
 

@@ -5,4 +5,4 @@ jobs:
   note:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Desktop bundles are dispatched manually. This workflow does not claim a green release build."
+      - run: echo "Desktop bundles use Tauri and are dispatched manually. This workflow does not claim a green release build."

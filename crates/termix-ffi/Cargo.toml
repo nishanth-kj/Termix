@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "C ABI used by the Dioxus app and any future native host"
+description = "C ABI for hosts that are not the Tauri shell"
 
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]

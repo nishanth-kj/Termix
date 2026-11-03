@@ -5,4 +5,4 @@ jobs:
   note:
     runs-on: macos-latest
     steps:
-      - run: echo "iOS bundles require Xcode and are dispatched manually."
+      - run: echo "iOS bundles use Tauri and require Xcode. They are dispatched manually."
