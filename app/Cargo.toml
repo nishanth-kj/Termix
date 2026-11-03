@@ -1,0 +1,19 @@
+[package]
+name = "termix-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Termix desktop, iOS, and Android UI"
+
+[[bin]]
+name = "termix-desktop"
+path = "src/main.rs"
+
+[dependencies]
+dioxus = { version = "0.7.10", features = ["desktop"] }
+termix-core = { path = "../crates/termix-core" }
+termix-monitor = { path = "../crates/termix-monitor" }
+termix-storage = { path = "../crates/termix-storage" }

@@ -1,0 +1,17 @@
+[package]
+name = "termix-security"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Encrypted secret blobs for Termix"
+
+[dependencies]
+aes-gcm = { workspace = true }
+argon2 = { workspace = true }
+rand = { workspace = true }
+thiserror = { workspace = true }
+base64 = { workspace = true }
+zeroize = { workspace = true }

@@ -1,0 +1,12 @@
+[package]
+name = "termix-automation"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Saved commands. Nothing runs unless the caller asks."
+
+[dependencies]
+termix-core = { path = "../termix-core" }

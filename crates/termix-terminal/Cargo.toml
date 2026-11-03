@@ -1,0 +1,14 @@
+[package]
+name = "termix-terminal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "VT screen fed by real PTY or SSH bytes"
+
+[dependencies]
+vte = { workspace = true }
+portable-pty = "0.8"
+thiserror = { workspace = true }

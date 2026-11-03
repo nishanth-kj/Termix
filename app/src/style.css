@@ -1,0 +1,37 @@
+:root {
+  color-scheme: dark;
+  --bg: #121418;
+  --panel: #1b1f26;
+  --line: #2c323b;
+  --text: #e7e4dc;
+  --mute: #9a958b;
+  --accent: #d6a15a;
+  --ok: #8fbf7a;
+  --bad: #d16a58;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+}
+* { box-sizing: border-box; }
+html, body, #main { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+.app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
+nav { border-right: 1px solid var(--line); background: var(--panel); padding: 16px 12px; }
+nav h1 { font-size: 16px; margin: 0 0 4px; letter-spacing: 0.04em; }
+nav p { margin: 0 0 16px; color: var(--mute); font-size: 12px; }
+button.nav, button.action {
+  display: block; width: 100%; text-align: left; background: transparent; color: var(--text);
+  border: 1px solid transparent; border-radius: 8px; padding: 10px 12px; margin-bottom: 4px; cursor: pointer;
+}
+button.nav.active { background: #262c35; border-color: var(--line); }
+main { padding: 20px 24px; }
+h2 { font-size: 18px; font-weight: 560; margin: 0 0 12px; }
+.card { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 12px 14px; margin-bottom: 8px; }
+.mute { color: var(--mute); }
+.ok { color: var(--ok); }
+.bad { color: var(--bad); }
+label { display: block; font-size: 12px; color: var(--mute); margin-top: 8px; }
+input { width: 100%; margin-top: 4px; background: #121418; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+button.action { width: auto; margin-top: 12px; border-color: var(--line); background: #262c35; }
+pre { white-space: pre-wrap; font-family: ui-monospace, "IBM Plex Mono", monospace; font-size: 13px; }
+@media (max-width: 720px) {
+  .app { grid-template-columns: 1fr; }
+  nav { border-right: 0; border-bottom: 1px solid var(--line); }
+}

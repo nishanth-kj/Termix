@@ -1,0 +1,16 @@
+[package]
+name = "termix-sftp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "SFTP operations on an authenticated SSH session"
+
+[dependencies]
+russh = { workspace = true }
+russh-sftp = { workspace = true }
+termix-ssh = { path = "../termix-ssh" }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
