@@ -1,8 +1,23 @@
-name: iOS bundle
+name: iOS
 on:
   workflow_dispatch:
+  push:
+    tags: ["v*"]
 jobs:
-  note:
+  compile:
     runs-on: macos-latest
     steps:
-      - run: echo "iOS bundles use Tauri and require Xcode. They are dispatched manually."
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Build the UI
+        run: npm ci && npm run build
+        working-directory: app
+      # An installable .ipa needs an Apple developer account, so this only proves the
+      # Rust code compiles for iOS. Add signing secrets to go further.
+      - run: cargo build -p termix-app --lib --target aarch64-apple-ios
+      - run: cargo build -p termix-app --lib --target aarch64-apple-ios-sim

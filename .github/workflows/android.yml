@@ -1,8 +1,35 @@
-name: Android bundle
+name: Android
 on:
   workflow_dispatch:
+  push:
+    tags: ["v*"]
 jobs:
-  note:
+  apk:
     runs-on: ubuntu-latest
+    env:
+      NDK_VERSION: 27.1.12297006
     steps:
-      - run: echo "Android bundles use Tauri and require the SDK and NDK. They are dispatched manually."
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "ndk;$NDK_VERSION"
+      - run: echo "NDK_HOME=$ANDROID_HOME/ndk/$NDK_VERSION" >> "$GITHUB_ENV"
+      - run: cargo install tauri-cli --version "^2" --locked
+      - run: npm ci
+        working-directory: app
+      # A debug build, signed with the throwaway debug key, so it installs but is not for release.
+      - run: cargo tauri android build --debug --apk --ci
+        working-directory: app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: termix-android
+          path: app/src-tauri/gen/android/app/build/outputs/apk/**/*.apk

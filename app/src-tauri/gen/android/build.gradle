@@ -1,0 +1,23 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.11.0'
+        // Tauri's own :tauri-android and :tauri-plugin-dialog projects are Kotlin.
+        // This app's classes are Java. The plugin is only here so those libraries can compile.
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.25'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+tasks.register('clean', Delete) {
+    delete 'build'
+}

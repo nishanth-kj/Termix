@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use chrono::{DateTime, Utc};
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use termix_core::{Machine, MachineId, NewMachine, Protocol};
 use termix_security::Vault;
 use uuid::Uuid;
@@ -314,6 +314,61 @@ impl Database {
         Ok(vault.decrypt(&ciphertext)?)
     }
 
+    /// Replace the saved secret of this kind for a machine.
+    pub fn set_machine_secret(
+        &self,
+        vault: &Vault,
+        machine_id: MachineId,
+        kind: &str,
+        plaintext: &[u8],
+    ) -> Result<(), StoreError> {
+        self.clear_machine_secret(machine_id, kind)?;
+        self.put_secret(vault, Some(machine_id), kind, plaintext)?;
+        Ok(())
+    }
+
+    pub fn machine_secret(
+        &self,
+        vault: &Vault,
+        machine_id: MachineId,
+        kind: &str,
+    ) -> Result<Option<Vec<u8>>, StoreError> {
+        let conn = self.conn.lock().expect("database lock");
+        let ciphertext = conn
+            .query_row(
+                "SELECT ciphertext FROM secrets WHERE machine_id = ?1 AND kind = ?2",
+                params![machine_id.to_string(), kind],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        ciphertext
+            .map(|blob| vault.decrypt(&blob).map_err(StoreError::from))
+            .transpose()
+    }
+
+    pub fn clear_machine_secret(
+        &self,
+        machine_id: MachineId,
+        kind: &str,
+    ) -> Result<(), StoreError> {
+        let conn = self.conn.lock().expect("database lock");
+        conn.execute(
+            "DELETE FROM secrets WHERE machine_id = ?1 AND kind = ?2",
+            params![machine_id.to_string(), kind],
+        )?;
+        Ok(())
+    }
+
+    /// Forget a pinned host key. The next connection is treated as a new host.
+    pub fn forget_host(&self, host: &str, port: u16) -> Result<bool, StoreError> {
+        let conn = self.conn.lock().expect("database lock");
+        let removed = conn.execute(
+            "DELETE FROM known_hosts WHERE host = ?1 AND port = ?2",
+            params![host, port],
+        )?;
+        Ok(removed > 0)
+    }
+
     pub fn insert_template(
         &self,
         name: &str,
@@ -441,7 +496,11 @@ pub fn default_key_path() -> PathBuf {
     data_dir().join("master.key")
 }
 
+/// `TERMIX_DATA_DIR` overrides the location, for tests and portable setups.
 pub fn data_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("TERMIX_DATA_DIR").filter(|dir| !dir.is_empty()) {
+        return PathBuf::from(dir);
+    }
     directories::ProjectDirs::from("com", "Termix", "Termix")
         .map(|dirs| dirs.data_local_dir().to_path_buf())
         .unwrap_or_else(|| PathBuf::from(".termix"))
@@ -500,6 +559,39 @@ mod tests {
             db.resolve("edge"),
             Err(StoreError::AmbiguousName(_))
         ));
+    }
+
+    #[test]
+    fn machine_secret_is_replaced_and_deleted_with_the_machine() {
+        let db = Database::open_in_memory().unwrap();
+        let vault = Vault::generate();
+        let machine = db.insert_machine(sample()).unwrap();
+        assert_eq!(
+            db.machine_secret(&vault, machine.id, "password").unwrap(),
+            None
+        );
+        db.set_machine_secret(&vault, machine.id, "password", b"one")
+            .unwrap();
+        db.set_machine_secret(&vault, machine.id, "password", b"two")
+            .unwrap();
+        assert_eq!(
+            db.machine_secret(&vault, machine.id, "password").unwrap(),
+            Some(b"two".to_vec())
+        );
+        db.delete_machine(machine.id).unwrap();
+        assert_eq!(
+            db.machine_secret(&vault, machine.id, "password").unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn forgetting_a_host_removes_the_pin() {
+        let db = Database::open_in_memory().unwrap();
+        db.trust_host("h", 22, "ssh-ed25519", "SHA256:abc").unwrap();
+        assert!(db.forget_host("h", 22).unwrap());
+        assert!(!db.forget_host("h", 22).unwrap());
+        assert_eq!(db.trusted_fingerprint("h", 22).unwrap(), None);
     }
 
     #[test]

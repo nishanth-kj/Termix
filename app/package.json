@@ -1,0 +1,23 @@
+{
+  "name": "termix-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && vite build",
+    "build:e2e": "tsc --noEmit && vite build --mode e2e"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.4",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0"
+  }
+}

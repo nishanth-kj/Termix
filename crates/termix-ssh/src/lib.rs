@@ -5,7 +5,7 @@
 //! Jump hosts, proxies, and ssh-agent are not implemented.
 
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use russh::client::{self, Handler};
@@ -29,7 +29,7 @@ pub enum SshError {
         algorithm: String,
         fingerprint: String,
     },
-    #[error("host key for {host}:{port} changed ({algorithm} {fingerprint})")]
+    #[error("host key for {host}:{port} does not match the trusted fingerprint (server presented {algorithm} {fingerprint})")]
     HostKeyMismatch {
         host: String,
         port: u16,
@@ -69,6 +69,14 @@ pub struct HostVerifier {
     host: String,
     port: u16,
     trusted: Option<String>,
+    accepted: Arc<Mutex<Option<HostKey>>>,
+}
+
+/// The key the server presented and the verifier accepted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HostKey {
+    pub algorithm: String,
+    pub fingerprint: String,
 }
 
 impl Handler for HostVerifier {
@@ -80,7 +88,13 @@ impl Handler for HostVerifier {
     ) -> Result<bool, Self::Error> {
         let (algorithm, fingerprint) = fingerprint_of(server_public_key);
         match &self.trusted {
-            Some(expected) if expected == &fingerprint => Ok(true),
+            Some(expected) if expected == &fingerprint => {
+                *self.accepted.lock().expect("host key lock") = Some(HostKey {
+                    algorithm,
+                    fingerprint,
+                });
+                Ok(true)
+            }
             Some(_) => Err(SshError::HostKeyMismatch {
                 host: self.host.clone(),
                 port: self.port,
@@ -106,6 +120,7 @@ fn fingerprint_of(key: &PublicKeyOrCertificate) -> (String, String) {
 
 pub struct SshSession {
     handle: client::Handle<HostVerifier>,
+    host_key: HostKey,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -120,38 +135,55 @@ impl SshSession {
         if request.jump_host.is_some() {
             return Err(SshError::NotImplemented("jump hosts"));
         }
+        // Keepalives notice a dead peer without cutting off a quiet long command.
         let config = Arc::new(client::Config {
-            inactivity_timeout: Some(Duration::from_secs(60)),
+            keepalive_interval: Some(Duration::from_secs(15)),
+            keepalive_max: 3,
+            inactivity_timeout: None,
             ..client::Config::default()
         });
+        let accepted = Arc::new(Mutex::new(None));
         let verify = HostVerifier {
             host: request.host.clone(),
             port: request.port,
             trusted: request.trusted_fingerprint.clone(),
+            accepted: accepted.clone(),
         };
-        let stream = timeout(
-            request.timeout,
-            TcpStream::connect((request.host.as_str(), request.port)),
-        )
-        .await
-        .map_err(|_| SshError::Timeout(request.host.clone(), request.port))?
-        .map_err(SshError::Io)?;
-        let mut handle = client::connect_stream(config, stream, verify).await?;
-        match request.auth {
-            Auth::Password(password) => {
-                let result = handle
-                    .authenticate_password(request.username, password)
-                    .await?;
-                if !result.success() {
-                    return Err(SshError::AuthFailed);
+        let (host, port, limit) = (request.host.clone(), request.port, request.timeout);
+        // The limit covers the TCP connect, the key exchange, and authentication,
+        // so a server that accepts the socket and then stalls cannot hang the caller.
+        let handle = timeout(limit, async move {
+            let stream = TcpStream::connect((request.host.as_str(), request.port)).await?;
+            let mut handle = client::connect_stream(config, stream, verify).await?;
+            match request.auth {
+                Auth::Password(password) => {
+                    let result = handle
+                        .authenticate_password(request.username, password)
+                        .await?;
+                    if !result.success() {
+                        return Err(SshError::AuthFailed);
+                    }
+                }
+                Auth::PrivateKey { path, passphrase } => {
+                    authenticate_key(&mut handle, &request.username, &path, passphrase.as_deref())
+                        .await?;
                 }
             }
-            Auth::PrivateKey { path, passphrase } => {
-                authenticate_key(&mut handle, &request.username, &path, passphrase.as_deref())
-                    .await?;
-            }
-        }
-        Ok(Self { handle })
+            Ok(handle)
+        })
+        .await
+        .map_err(|_| SshError::Timeout(host, port))??;
+        let host_key = accepted
+            .lock()
+            .expect("host key lock")
+            .take()
+            .ok_or_else(|| SshError::Message("server did not present a host key".into()))?;
+        Ok(Self { handle, host_key })
+    }
+
+    /// The key this session was verified against.
+    pub fn host_key(&self) -> &HostKey {
+        &self.host_key
     }
 
     pub async fn exec(&self, command: &str) -> Result<ExecResult, SshError> {

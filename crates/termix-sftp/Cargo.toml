@@ -11,6 +11,7 @@ description = "SFTP operations on an authenticated SSH session"
 [dependencies]
 russh = { workspace = true }
 russh-sftp = { workspace = true }
+serde = { workspace = true }
 termix-ssh = { path = "../termix-ssh" }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }

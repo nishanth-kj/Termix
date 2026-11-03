@@ -2,61 +2,243 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Termix</title>
-    <link rel="stylesheet" href="app.css" />
   </head>
-  <body>
+  <body data-view="list">
+    <svg class="sprite" aria-hidden="true">
+      <symbol id="i-terminal" viewBox="0 0 24 24"><path d="m5 7 5 5-5 5M12 17h7" /></symbol>
+      <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></symbol>
+      <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4" /></symbol>
+      <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 6 0l3-3a4 4 0 0 0-6-6l-1 1M14 10a4 4 0 0 0-6 0l-3 3a4 4 0 0 0 6 6l1-1" /></symbol>
+      <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4" /></symbol>
+      <symbol id="i-sync" viewBox="0 0 24 24"><path d="M4 11a8 8 0 0 1 14-4l2 2M20 5v4h-4M20 13a8 8 0 0 1-14 4l-2-2M4 19v-4h4" /></symbol>
+      <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8v.01" /></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 10l2 2-2 2M13 14h3" /></symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></symbol>
+      <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6" /></symbol>
+      <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15V4M7 9l5-5 5 5M4 20h16" /></symbol>
+      <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 20h16" /></symbol>
+      <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></symbol>
+      <symbol id="i-pencil" viewBox="0 0 24 24"><path d="m4 20 1-4L16 5l3 3L8 19zM14 7l3 3" /></symbol>
+      <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7" /></symbol>
+      <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2-5.3L20 9M20 4v5h-5" /></symbol>
+      <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M5 5h14v10H5zM2 19h20" /></symbol>
+      <symbol id="i-server" viewBox="0 0 24 24"><path d="M4 4h16v7H4zM4 13h16v7H4zM8 7.5v.01M8 16.5v.01" /></symbol>
+      <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" /></symbol>
+      <symbol id="i-minus" viewBox="0 0 24 24"><path d="M6 12h12" /></symbol>
+      <symbol id="i-swap" viewBox="0 0 24 24"><path d="M4 8h14M14 4l4 4-4 4M20 16H6M10 12l-4 4 4 4" /></symbol>
+    </svg>
+
     <div class="app">
-      <aside>
-        <h1>Termix</h1>
-        <p>Every machine. One control center.</p>
-        <button class="nav active" data-tab="machines" type="button">Machines</button>
-        <button class="nav" data-tab="monitor" type="button">This machine</button>
-        <button class="nav" data-tab="support" type="button">What works</button>
+      <aside class="sidebar">
+        <header class="brand">
+          <img src="icon.png" alt="" width="30" height="30" />
+          <div>
+            <strong>Termix</strong>
+            <span>Every machine. One control center.</span>
+          </div>
+        </header>
+        <button id="add-machine" class="primary wide" type="button"><svg class="icon"><use href="#i-plus" /></svg>Add machine</button>
+        <div class="side-scroll">
+          <p class="side-label">Machines</p>
+          <div id="machine-list" class="side-list"></div>
+          <p class="side-label">Local</p>
+          <div class="side-list">
+            <button id="this-device" class="side-item" type="button">
+              <span class="side-icon"><svg class="icon"><use href="#i-laptop" /></svg></span>
+              <span class="side-text"><strong>This device</strong><small>Local metrics and shell</small></span>
+            </button>
+          </div>
+        </div>
+        <button id="open-support" class="quiet wide" type="button"><svg class="icon"><use href="#i-info" /></svg>What works</button>
       </aside>
-      <main>
-        <section id="machines">
-          <h2>Machines</h2>
-          <p class="mute">Saved on this device. A TCP probe only means the port accepted a connection.</p>
-          <div id="machine-list"></div>
-          <form id="add-form" class="card">
-            <h2>Add a host</h2>
-            <label>Name <input name="name" required /></label>
-            <label>Host <input name="host" required /></label>
-            <label>Port <input name="port" type="number" min="1" max="65535" value="22" required /></label>
-            <label>Username <input name="username" required /></label>
-            <button type="submit">Save host</button>
-            <p id="add-status" class="mute"></p>
-          </form>
-          <form id="run-form" class="card">
-            <h2>Run a command</h2>
-            <label>Machine
-              <select name="id" required>
-                <option value="" disabled selected>Select a saved host</option>
-              </select>
-            </label>
-            <label>Command <input name="command" required value="uname -a" /></label>
-            <label>Password <input name="password" type="password" autocomplete="off" /></label>
-            <label class="check"><input name="trust" type="checkbox" /> Trust the host key after I have checked the fingerprint</label>
-            <label class="check"><input name="yes" type="checkbox" /> I intend to run a destructive command</label>
-            <button type="button" id="probe">Probe port</button>
-            <button type="submit">Run</button>
-            <pre id="output"></pre>
-          </form>
+
+      <main class="workspace">
+        <section id="welcome" class="empty-state">
+          <img src="icon.png" alt="" width="72" height="72" />
+          <h1>Connect to your first machine</h1>
+          <p>Save a host once, then open terminals, browse files, run commands, and read live metrics from any of your devices.</p>
+          <button id="welcome-add" class="primary" type="button"><svg class="icon"><use href="#i-plus" /></svg>Add machine</button>
         </section>
-        <section id="monitor" hidden>
-          <h2>This machine</h2>
-          <p class="mute">Numbers come from the operating system on this device.</p>
-          <div id="metrics" class="card"></div>
+
+        <section id="support" class="page" hidden>
+          <header class="page-header">
+            <button class="icon-button back" type="button" aria-label="Back to machines"><svg class="icon"><use href="#i-back" /></svg></button>
+            <div><h1>What works</h1><p>Unfinished protocols stay on this list. They are never shown as connected.</p></div>
+          </header>
+          <div id="support-list" class="page-body"></div>
         </section>
-        <section id="support" hidden>
-          <h2>What works</h2>
-          <p class="mute">Unfinished protocols stay on this list. They are not shown as connected.</p>
-          <div id="support-list"></div>
-        </section>
+
+        <div id="machine-view" class="machine-view" hidden>
+          <header class="page-header">
+            <button class="icon-button back" type="button" aria-label="Back to machines"><svg class="icon"><use href="#i-back" /></svg></button>
+            <div class="grow">
+              <h1 id="machine-title"></h1>
+              <p id="machine-subtitle" class="mono"></p>
+            </div>
+            <span id="machine-state" class="pill"></span>
+          </header>
+
+          <nav id="tabs" class="tabs" role="tablist" aria-label="Machine tools">
+            <button class="tab" role="tab" data-tab="overview" type="button"><svg class="icon"><use href="#i-info" /></svg><span>Overview</span></button>
+            <button class="tab" role="tab" data-tab="terminal" type="button"><svg class="icon"><use href="#i-terminal" /></svg><span>Terminal</span></button>
+            <button class="tab" role="tab" data-tab="files" type="button"><svg class="icon"><use href="#i-folder" /></svg><span>Files</span></button>
+            <button class="tab" role="tab" data-tab="commands" type="button"><svg class="icon"><use href="#i-play" /></svg><span>Run</span></button>
+            <button class="tab" role="tab" data-tab="monitor" type="button"><svg class="icon"><use href="#i-pulse" /></svg><span>Monitor</span></button>
+            <button class="tab desktop-only" role="tab" data-tab="sync" type="button"><svg class="icon"><use href="#i-sync" /></svg><span>Sync</span></button>
+          </nav>
+
+          <section id="overview" class="panel" hidden>
+            <dl id="overview-details" class="details"></dl>
+            <div class="button-row">
+              <button id="overview-terminal" class="primary" type="button"><svg class="icon"><use href="#i-terminal" /></svg>Open terminal</button>
+              <button id="overview-files" type="button"><svg class="icon"><use href="#i-folder" /></svg>Browse files</button>
+              <button id="overview-probe" type="button"><svg class="icon"><use href="#i-link" /></svg>Test port</button>
+            </div>
+            <p id="overview-status" class="hint" role="status"></p>
+            <div class="danger-zone">
+              <h2>Manage</h2>
+              <div class="manage-row">
+                <div><strong>Host key</strong><p>Forget it only if the server's key really changed.</p></div>
+                <button id="forget-host" type="button">Forget host key</button>
+              </div>
+              <div class="manage-row">
+                <div><strong>Saved password</strong><p>Encrypted on this device.</p></div>
+                <button id="forget-password" type="button">Forget password</button>
+              </div>
+              <div class="manage-row">
+                <div><strong>Remove machine</strong><p>Nothing changes on the machine itself.</p></div>
+                <button id="delete-machine" class="danger" type="button">Delete</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="terminal" class="panel flush" hidden>
+            <div class="term-frame">
+              <div class="term-bar">
+                <span id="term-status" class="term-status" role="status"></span>
+                <button id="term-close" class="small" type="button" hidden>Disconnect</button>
+              </div>
+              <div id="term-host"></div>
+              <div id="term-empty" class="term-empty">
+                <svg class="icon large"><use href="#i-terminal" /></svg>
+                <p id="term-empty-text"></p>
+                <button id="term-connect" class="primary" type="button">Connect</button>
+              </div>
+            </div>
+          </section>
+
+          <section id="files" class="panel" hidden>
+            <div class="toolbar">
+              <button id="files-up" class="icon-button" type="button" aria-label="Parent folder" title="Parent folder"><svg class="icon"><use href="#i-up" /></svg></button>
+              <nav id="crumbs" class="crumbs" aria-label="Current folder"></nav>
+              <button id="files-go" class="small" type="button">Go to…</button>
+              <button id="files-refresh" class="icon-button" type="button" aria-label="Refresh" title="Refresh"><svg class="icon"><use href="#i-refresh" /></svg></button>
+              <button id="files-mkdir" class="small" type="button"><svg class="icon"><use href="#i-plus" /></svg>Folder</button>
+              <button id="files-upload" class="small desktop-only" type="button"><svg class="icon"><use href="#i-upload" /></svg>Upload</button>
+            </div>
+            <p id="files-status" class="hint" role="status"></p>
+            <div id="file-list" class="file-table"></div>
+          </section>
+
+          <section id="commands" class="panel console" hidden>
+            <div id="transcript" class="transcript" role="log">
+              <p id="transcript-empty" class="hint">Each command opens its own connection and reports its exit code. Use the terminal for anything interactive.</p>
+            </div>
+            <form id="run-form" class="prompt">
+              <span class="prompt-mark">$</span>
+              <input name="command" aria-label="Command" placeholder="uname -a" required spellcheck="false" autocapitalize="off" autocomplete="off" />
+              <button class="primary" type="submit">Run</button>
+            </form>
+          </section>
+
+          <section id="monitor" class="panel" hidden>
+            <div class="toolbar">
+              <p id="metrics-source" class="hint grow"></p>
+              <button id="metrics-refresh" class="small" type="button"><svg class="icon"><use href="#i-refresh" /></svg>Refresh</button>
+            </div>
+            <div id="metrics"></div>
+          </section>
+
+          <section id="sync" class="panel" hidden>
+            <form id="sync-form" class="sync-form">
+              <label>Local folder
+                <span class="with-button">
+                  <input name="local" required spellcheck="false" />
+                  <button id="sync-pick" type="button">Choose…</button>
+                </span>
+              </label>
+              <button id="sync-direction" class="direction" type="button" aria-label="Swap direction" data-pull="false"><svg class="icon"><use href="#i-swap" /></svg><span id="sync-direction-text">Local to remote</span></button>
+              <label>Remote folder <input name="remote" required spellcheck="false" autocapitalize="off" /></label>
+              <label class="span">Skip these names <input name="excludes" value=".git, node_modules, target" spellcheck="false" /></label>
+              <div class="button-row span">
+                <button class="primary" type="submit">Compare folders</button>
+                <button id="sync-apply" type="button" disabled>Copy files</button>
+              </div>
+            </form>
+            <p class="hint">Files are copied and never deleted. A newer file at the destination is left alone.</p>
+            <div id="sync-output" role="status"></div>
+          </section>
+        </div>
       </main>
     </div>
-    <script src="app.js"></script>
+
+    <dialog id="add-dialog">
+      <form id="add-form">
+        <h2>Add a machine</h2>
+        <label>Name <input name="name" required placeholder="Build server" /></label>
+        <div class="field-row">
+          <label class="grow">Host <input name="host" required placeholder="10.0.0.8 or box.example.com" spellcheck="false" autocapitalize="off" /></label>
+          <label class="port">Port <input name="port" type="number" min="1" max="65535" value="22" required /></label>
+        </div>
+        <label>Username <input name="username" required placeholder="ops" spellcheck="false" autocapitalize="off" /></label>
+        <p id="add-status" class="error" role="alert"></p>
+        <div class="dialog-actions">
+          <button id="add-cancel" type="button">Cancel</button>
+          <button class="primary" type="submit">Save machine</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="signin-dialog">
+      <form id="signin-form" autocomplete="off">
+        <h2 id="signin-title"></h2>
+        <p id="signin-body" class="dialog-text"></p>
+        <p id="signin-error" class="error" role="alert"></p>
+        <label>Password <input name="password" type="password" autocomplete="off" /></label>
+        <div class="desktop-only key-fields">
+          <label>Or a private key
+            <span class="with-button">
+              <input name="keyPath" spellcheck="false" placeholder="Path to private key" />
+              <button id="signin-pick" type="button">Choose…</button>
+            </span>
+          </label>
+          <label>Key passphrase <input name="keyPassphrase" type="password" autocomplete="off" placeholder="Only if the key has one" /></label>
+        </div>
+        <label class="check"><input name="remember" type="checkbox" /> Save this password, encrypted on this device</label>
+        <div class="dialog-actions">
+          <button id="signin-cancel" type="button">Cancel</button>
+          <button class="primary" type="submit">Sign in</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="ask">
+      <form method="dialog">
+        <h2 id="ask-title"></h2>
+        <p id="ask-body" class="dialog-text"></p>
+        <code id="ask-code" hidden></code>
+        <label id="ask-input-label" hidden><span id="ask-input-name"></span> <input id="ask-input" spellcheck="false" autocapitalize="off" /></label>
+        <div class="dialog-actions">
+          <button value="cancel" type="submit">Cancel</button>
+          <button id="ask-ok" class="primary" value="ok" type="submit"></button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+
+    <script type="module" src="./src/main.ts"></script>
   </body>
 </html>

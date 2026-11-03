@@ -15,3 +15,6 @@ android/.gradle
 *.aab
 *.ipa
 *.dSYM
+/app/src-tauri/gen/schemas
+/app/dist
+/app/node_modules

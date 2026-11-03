@@ -1,20 +1,22 @@
 //! A small VT screen. It only changes when bytes are fed into it.
 //! It is not a full xterm: it handles printing, newline, carriage return,
-//! backspace, and a few CSI cursor commands.
+//! backspace, scrolling, and a few CSI cursor commands. The app draws its
+//! terminal with xterm.js; this screen serves tests and text-only callers.
 
 use std::io::{Read, Write};
 
-use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+use portable_pty::{native_pty_system, CommandBuilder, MasterPty, PtySize};
 use vte::{Params, Parser, Perform};
 
 pub const COLS: usize = 80;
 pub const ROWS: usize = 24;
 
-#[derive(Clone)]
 pub struct Screen {
     cells: Vec<char>,
     cursor_x: usize,
     cursor_y: usize,
+    // Kept between calls: an escape sequence can span two reads.
+    parser: Parser,
 }
 
 impl Default for Screen {
@@ -23,16 +25,18 @@ impl Default for Screen {
             cells: vec![' '; COLS * ROWS],
             cursor_x: 0,
             cursor_y: 0,
+            parser: Parser::new(),
         }
     }
 }
 
 impl Screen {
     pub fn feed(&mut self, bytes: &[u8]) {
-        let mut parser = Parser::new();
+        let mut parser = std::mem::take(&mut self.parser);
         for byte in bytes {
             parser.advance(self, *byte);
         }
+        self.parser = parser;
     }
 
     pub fn rows(&self) -> impl Iterator<Item = String> + '_ {
@@ -46,14 +50,23 @@ impl Screen {
         self.rows().collect::<Vec<_>>().join("\n")
     }
 
+    fn line_feed(&mut self) {
+        if self.cursor_y + 1 < ROWS {
+            self.cursor_y += 1;
+        } else {
+            self.cells.drain(..COLS);
+            self.cells.resize(COLS * ROWS, ' ');
+        }
+    }
+
     fn put_char(&mut self, ch: char) {
         if ch == '\n' {
-            self.cursor_y = (self.cursor_y + 1).min(ROWS - 1);
+            self.line_feed();
             return;
         }
         if self.cursor_x >= COLS {
             self.cursor_x = 0;
-            self.cursor_y = (self.cursor_y + 1).min(ROWS - 1);
+            self.line_feed();
         }
         self.cells[self.cursor_y * COLS + self.cursor_x] = ch;
         self.cursor_x += 1;
@@ -124,6 +137,8 @@ pub enum PtyError {
 }
 
 pub struct LocalPty {
+    // Dropping the master closes the pseudo console, so it lives as long as the shell.
+    master: Box<dyn MasterPty + Send>,
     reader: Box<dyn Read + Send>,
     writer: Box<dyn Write + Send>,
     child: Box<dyn portable_pty::Child + Send>,
@@ -140,8 +155,7 @@ impl LocalPty {
                 pixel_height: 0,
             })
             .map_err(|error| PtyError::Pty(error.to_string()))?;
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".into());
-        let mut command = CommandBuilder::new(shell);
+        let mut command = CommandBuilder::new(default_shell());
         command.env("TERM", "xterm-256color");
         let child = pair
             .slave
@@ -156,6 +170,7 @@ impl LocalPty {
             .take_writer()
             .map_err(|error| PtyError::Pty(error.to_string()))?;
         Ok(Self {
+            master: pair.master,
             reader,
             writer,
             child,
@@ -171,8 +186,72 @@ impl LocalPty {
         self.writer.flush()
     }
 
+    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), PtyError> {
+        self.master
+            .resize(PtySize {
+                rows,
+                cols: columns,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| PtyError::Pty(error.to_string()))
+    }
+
+    /// Split into parts that can be used from different threads.
+    pub fn into_parts(self) -> LocalPtyParts {
+        LocalPtyParts {
+            control: LocalPtyControl {
+                master: self.master,
+                writer: self.writer,
+                child: self.child,
+            },
+            reader: self.reader,
+        }
+    }
+
     pub fn kill(&mut self) -> std::io::Result<()> {
         self.child.kill()
+    }
+}
+
+pub struct LocalPtyParts {
+    pub control: LocalPtyControl,
+    pub reader: Box<dyn Read + Send>,
+}
+
+pub struct LocalPtyControl {
+    master: Box<dyn MasterPty + Send>,
+    writer: Box<dyn Write + Send>,
+    child: Box<dyn portable_pty::Child + Send>,
+}
+
+impl LocalPtyControl {
+    pub fn write(&mut self, bytes: &[u8]) -> std::io::Result<()> {
+        self.writer.write_all(bytes)?;
+        self.writer.flush()
+    }
+
+    pub fn resize(&self, columns: u16, rows: u16) -> Result<(), PtyError> {
+        self.master
+            .resize(PtySize {
+                rows,
+                cols: columns,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|error| PtyError::Pty(error.to_string()))
+    }
+
+    pub fn kill(&mut self) -> std::io::Result<()> {
+        self.child.kill()
+    }
+}
+
+fn default_shell() -> String {
+    if cfg!(windows) {
+        std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into())
+    } else {
+        std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())
     }
 }
 
@@ -187,5 +266,56 @@ mod tests {
         let text = screen.text();
         assert!(text.starts_with("hi"));
         assert!(text.contains("there"));
+    }
+
+    #[test]
+    fn escape_sequence_split_across_reads_is_not_printed() {
+        let mut screen = Screen::default();
+        screen.feed(b"a\x1b[");
+        screen.feed(b"2Kb");
+        assert!(!screen.text().contains('['));
+        assert!(!screen.text().contains("2K"));
+    }
+
+    #[test]
+    fn output_scrolls_at_the_bottom() {
+        let mut screen = Screen::default();
+        for line in 0..(ROWS + 5) {
+            screen.feed(format!("line{line}\r\n").as_bytes());
+        }
+        let text = screen.text();
+        assert!(!text.contains("line0 "));
+        assert!(text.contains(&format!("line{}", ROWS + 4)));
+    }
+
+    #[test]
+    fn local_shell_runs_a_command() {
+        let pty = LocalPty::spawn_shell(80, 24).unwrap();
+        let LocalPtyParts {
+            mut control,
+            mut reader,
+        } = pty.into_parts();
+        control.write(b"echo termix-pty-ok\r\n").unwrap();
+        control.resize(100, 30).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut buffer = [0u8; 4096];
+            let mut seen = String::new();
+            while let Ok(count) = reader.read(&mut buffer) {
+                if count == 0 {
+                    break;
+                }
+                seen.push_str(&String::from_utf8_lossy(&buffer[..count]));
+                // The typed command echoes too, so require the output on its own line.
+                if seen.matches("termix-pty-ok").count() >= 2 {
+                    let _ = sender.send(());
+                    break;
+                }
+            }
+        });
+        receiver
+            .recv_timeout(std::time::Duration::from_secs(20))
+            .expect("the shell should echo the command");
+        control.kill().unwrap();
     }
 }

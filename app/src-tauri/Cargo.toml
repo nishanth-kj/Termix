@@ -6,7 +6,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 rust-version.workspace = true
-description = "Termix Tauri shell for Windows, macOS, iOS, and Android"
+description = "Termix Tauri app for Windows, macOS, Linux, iOS, and Android"
 
 [lib]
 name = "termix_app"
@@ -21,12 +21,20 @@ tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
 serde = { workspace = true }
+serde_json = { workspace = true }
 tauri = { version = "2.12", features = [] }
-termix-automation = { path = "../../crates/termix-automation" }
+tauri-plugin-dialog = "2"
 termix-core = { path = "../../crates/termix-core" }
 termix-logging = { path = "../../crates/termix-logging" }
 termix-monitor = { path = "../../crates/termix-monitor" }
 termix-network = { path = "../../crates/termix-network" }
-termix-security = { path = "../../crates/termix-security" }
+termix-session = { path = "../../crates/termix-session" }
+termix-sftp = { path = "../../crates/termix-sftp" }
 termix-ssh = { path = "../../crates/termix-ssh" }
 termix-storage = { path = "../../crates/termix-storage" }
+termix-sync = { path = "../../crates/termix-sync" }
+tokio = { workspace = true }
+
+# iOS and Android do not allow an app to start a local shell.
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+termix-terminal = { path = "../../crates/termix-terminal" }

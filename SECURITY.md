@@ -2,7 +2,7 @@
 
 ## Supported use
 
-Termix stores machine metadata in SQLite and encrypts passwords and key material with AES-256-GCM. The master key is a 32-byte file created with mode `0600` on Unix. This is not an OS keychain. Protect that file.
+Termix stores machine metadata in SQLite and encrypts passwords and key material with AES-256-GCM. The master key is a 32-byte file in the app data folder, next to the database. On Unix it is created with mode `0600` and a looser file is refused. On Windows it relies on the permissions of your user profile. This is not an OS keychain: anything running as you, or a backup of that folder, can read the key and therefore the saved passwords. Do not save passwords if that is a concern.
 
 ## Reporting
 

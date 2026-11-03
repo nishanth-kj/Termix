@@ -2,7 +2,7 @@
 //! Nothing in this crate synthesizes a CPU percentage.
 
 use serde::{Deserialize, Serialize};
-use sysinfo::{CpuRefreshKind, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, Disks, MemoryRefreshKind, ProcessRefreshKind, RefreshKind, System};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sample {
@@ -170,6 +170,25 @@ pub fn sample_linux_text(
     })
 }
 
+const SECTION: &str = "@@termix-section@@";
+
+/// Run this on a Linux host, then pass its stdout to [`parse_remote_sample`].
+/// `/proc/stat` is read twice because CPU usage is the change between readings.
+pub const REMOTE_SAMPLE_COMMAND: &str = "cat /proc/stat && echo @@termix-section@@ && sleep 1 && \
+    cat /proc/stat && echo @@termix-section@@ && \
+    cat /proc/meminfo && echo @@termix-section@@ && \
+    cat /proc/uptime && echo @@termix-section@@ && LC_ALL=C df -P -k";
+
+pub fn parse_remote_sample(output: &str) -> Option<Result<Sample, ParseError>> {
+    let sections: Vec<&str> = output.split(SECTION).map(str::trim_start).collect();
+    match sections.as_slice() {
+        [stat_prev, stat_next, meminfo, uptime, df] => {
+            Some(sample_linux_text(stat_prev, stat_next, meminfo, uptime, df))
+        }
+        _ => None,
+    }
+}
+
 /// Reads this machine through sysinfo. CPU usage needs two refreshes; the first
 /// call can return `cpu_percent: None` because the kernel has no delta yet.
 pub fn sample_local() -> Result<Sample, String> {
@@ -183,14 +202,25 @@ pub fn sample_local() -> Result<Sample, String> {
     system.refresh_cpu_usage();
     system.refresh_memory();
     system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    let processes = system
+    let mut processes: Vec<ProcessInfo> = system
         .processes()
         .iter()
-        .take(12)
         .map(|(pid, process)| ProcessInfo {
             pid: pid.as_u32(),
             name: process.name().to_string_lossy().to_string(),
             memory_bytes: process.memory(),
+        })
+        .collect();
+    processes.sort_by_key(|process| std::cmp::Reverse(process.memory_bytes));
+    processes.truncate(12);
+    let disks = Disks::new_with_refreshed_list()
+        .map_err(|error| error.to_string())?
+        .iter()
+        .map(|disk| Disk {
+            filesystem: disk.name().to_string_lossy().to_string(),
+            mount: disk.mount_point().to_string_lossy().to_string(),
+            total_kib: disk.total_space() / 1024,
+            used_kib: disk.total_space().saturating_sub(disk.available_space()) / 1024,
         })
         .collect();
     Ok(Sample {
@@ -199,7 +229,7 @@ pub fn sample_local() -> Result<Sample, String> {
         memory_total_bytes: Some(system.total_memory()),
         memory_used_bytes: Some(system.used_memory()),
         uptime_seconds: System::uptime().ok(),
-        disks: Vec::new(),
+        disks,
         processes,
     })
 }
@@ -222,5 +252,36 @@ mod tests {
         assert_eq!(sample.memory_used_bytes, Some(750_000 * 1024));
         assert_eq!(sample.uptime_seconds, Some(3661));
         assert_eq!(sample.disks[0].mount, "/");
+    }
+
+    #[test]
+    fn parses_remote_output_and_rejects_other_systems() {
+        let output = "cpu  100 0 50 850 0 0 0 0 0 0\n@@termix-section@@\n\
+            cpu  150 0 80 900 0 0 0 0 0 0\n@@termix-section@@\n\
+            MemTotal: 1000000 kB\nMemAvailable: 250000 kB\n@@termix-section@@\n\
+            3661.5 1000.0\n@@termix-section@@\n\
+            Filesystem 1024-blocks Used Available Capacity Mounted on\n\
+            /dev/sda1 1000 400 600 40% /\n";
+        let sample = parse_remote_sample(output).unwrap().unwrap();
+        assert_eq!(sample.uptime_seconds, Some(3661));
+        assert_eq!(sample.disks.len(), 1);
+        assert!(parse_remote_sample("cat: /proc/stat: No such file").is_none());
+    }
+
+    #[test]
+    fn remote_command_uses_the_section_marker() {
+        assert_eq!(REMOTE_SAMPLE_COMMAND.matches(SECTION).count(), 4);
+    }
+
+    #[test]
+    fn local_sample_comes_from_the_os() {
+        let sample = sample_local().unwrap();
+        assert_eq!(sample.source, "local:sysinfo");
+        assert!(sample.memory_total_bytes.unwrap_or(0) > 0);
+        assert!(sample.processes.len() <= 12);
+        assert!(sample
+            .processes
+            .windows(2)
+            .all(|pair| pair[0].memory_bytes >= pair[1].memory_bytes));
     }
 }

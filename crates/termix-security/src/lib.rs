@@ -4,15 +4,16 @@
 //! The 32-byte master key is random. It is not derived from the secret itself.
 //! A user passphrase can wrap that master key with Argon2id.
 //!
-//! OS keychain backends are not implemented in this revision. The master key
-//! file must be created with mode 0600 by the caller. Losing the key file
-//! makes stored secrets unrecoverable.
+//! OS keychain backends are not implemented in this revision. On Unix the key
+//! file is created with mode 0600 and a looser file is refused. On Windows it
+//! relies on the permissions of the user's profile directory. Losing the key
+//! file makes stored secrets unrecoverable.
 
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Nonce};
 use argon2::{Argon2, Params};
 use rand::RngCore;
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
@@ -94,8 +95,7 @@ pub struct WrappedMasterKey {
 pub fn wrap_master_key(passphrase: &str, vault: &Vault) -> Result<WrappedMasterKey, CryptoError> {
     let mut salt = [0u8; SALT_LEN];
     rand::rngs::OsRng.fill_bytes(&mut salt);
-    let kek = derive(passphrase, &salt)?;
-    let wrapper = Vault::from_key(kek);
+    let wrapper = Vault::from_key(*derive(passphrase, &salt)?);
     let blob = wrapper.encrypt(vault.key_bytes())?;
     Ok(WrappedMasterKey { salt, blob })
 }
@@ -104,9 +104,8 @@ pub fn unwrap_master_key(
     passphrase: &str,
     wrapped: &WrappedMasterKey,
 ) -> Result<Vault, CryptoError> {
-    let kek = derive(passphrase, &wrapped.salt)?;
-    let wrapper = Vault::from_key(kek);
-    let key = wrapper.decrypt(&wrapped.blob)?;
+    let wrapper = Vault::from_key(*derive(passphrase, &wrapped.salt)?);
+    let key = Zeroizing::new(wrapper.decrypt(&wrapped.blob)?);
     if key.len() != KEY_LEN {
         return Err(CryptoError::Malformed);
     }
@@ -115,32 +114,65 @@ pub fn unwrap_master_key(
     Ok(Vault::from_key(arr))
 }
 
-fn derive(passphrase: &str, salt: &[u8]) -> Result<[u8; KEY_LEN], CryptoError> {
+fn derive(passphrase: &str, salt: &[u8]) -> Result<Zeroizing<[u8; KEY_LEN]>, CryptoError> {
     let params = Params::new(19_456, 2, 1, Some(KEY_LEN)).map_err(|_| CryptoError::Derive)?;
     let argon = Argon2::new(argon2::Algorithm::Argon2id, argon2::Version::V0x13, params);
-    let mut out = [0u8; KEY_LEN];
+    let mut out = Zeroizing::new([0u8; KEY_LEN]);
     argon
-        .hash_password_into(passphrase.as_bytes(), salt, &mut out)
+        .hash_password_into(passphrase.as_bytes(), salt, out.as_mut())
         .map_err(|_| CryptoError::Derive)?;
     Ok(out)
 }
 
-/// Write a master key so only the owner can read it on Unix.
+/// Create a master key file that only the owner can read on Unix. The mode is
+/// set when the file is created, so it is never readable by anyone else, and an
+/// existing key is never overwritten.
 pub fn store_key_file(path: &std::path::Path, vault: &Vault) -> std::io::Result<()> {
+    use std::io::Write;
+
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(path, vault.key_bytes())?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
     }
-    Ok(())
+    options.open(path)?.write_all(vault.key_bytes())
+}
+
+/// Load the master key, creating it the first time. Two processes starting
+/// together end up with the same key.
+pub fn load_or_create_key_file(path: &std::path::Path) -> std::io::Result<Vault> {
+    if path.exists() {
+        return load_key_file(path);
+    }
+    let vault = Vault::generate();
+    match store_key_file(path, &vault) {
+        Ok(()) => Ok(vault),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => load_key_file(path),
+        Err(error) => Err(error),
+    }
 }
 
 pub fn load_key_file(path: &std::path::Path) -> std::io::Result<Vault> {
-    let bytes = std::fs::read(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mode = std::fs::metadata(path)?.permissions().mode();
+        if mode & 0o077 != 0 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!(
+                    "{} is readable by other users; run chmod 600 on it",
+                    path.display()
+                ),
+            ));
+        }
+    }
+    let bytes = Zeroizing::new(std::fs::read(path)?);
     if bytes.len() != KEY_LEN {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
@@ -173,5 +205,50 @@ mod tests {
         let blob = vault.encrypt(b"key-material").unwrap();
         assert_eq!(opened.decrypt(&blob).unwrap(), b"key-material");
         assert!(unwrap_master_key("wrong", &wrapped).is_err());
+    }
+
+    fn temp_key_path(name: &str) -> std::path::PathBuf {
+        let mut dir = std::env::temp_dir();
+        dir.push(format!("termix-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir.join("master.key")
+    }
+
+    #[test]
+    fn key_file_is_created_once_and_never_overwritten() {
+        let path = temp_key_path("create");
+        let first = load_or_create_key_file(&path).unwrap();
+        let again = load_or_create_key_file(&path).unwrap();
+        assert_eq!(first.key_bytes(), again.key_bytes());
+        assert!(store_key_file(&path, &Vault::generate()).is_err());
+        assert_eq!(load_key_file(&path).unwrap().key_bytes(), first.key_bytes());
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn short_key_file_is_rejected() {
+        let path = temp_key_path("short");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, b"short").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600)).unwrap();
+        }
+        assert!(load_key_file(&path).is_err());
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn key_file_mode_is_enforced() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_key_path("mode");
+        load_or_create_key_file(&path).unwrap();
+        let mode = std::fs::metadata(&path).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(load_key_file(&path).is_err());
+        std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
     }
 }

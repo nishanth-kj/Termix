@@ -1,0 +1,29 @@
+[package]
+name = "termix-session"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Workflows shared by the Termix CLI and app: trust, credentials, commands, metrics, sync"
+
+[dependencies]
+termix-automation = { path = "../termix-automation" }
+termix-core = { path = "../termix-core" }
+termix-logging = { path = "../termix-logging" }
+termix-monitor = { path = "../termix-monitor" }
+termix-security = { path = "../termix-security" }
+termix-sftp = { path = "../termix-sftp" }
+termix-ssh = { path = "../termix-ssh" }
+termix-storage = { path = "../termix-storage" }
+termix-sync = { path = "../termix-sync" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+russh = { workspace = true }
+russh-sftp = { workspace = true }
+rand = "0.10"
+tokio = { workspace = true, features = ["signal"] }

@@ -14,6 +14,7 @@ members = [
     "crates/termix-protocols",
     "crates/termix-sync",
     "crates/termix-automation",
+    "crates/termix-session",
     "crates/termix-ffi",
     "crates/termix-cli",
 ]
@@ -30,6 +31,7 @@ default-members = [
     "crates/termix-protocols",
     "crates/termix-sync",
     "crates/termix-automation",
+    "crates/termix-session",
     "crates/termix-ffi",
     "crates/termix-cli",
 ]
@@ -40,7 +42,7 @@ edition = "2021"
 license = "Apache-2.0"
 authors = ["Nishanth <https://github.com/nishanth-kj>"]
 repository = "https://github.com/nishanth-kj/Termix"
-rust-version = "1.85"
+rust-version = "1.95"
 description = "Termix — every machine, one control center"
 
 [workspace.dependencies]

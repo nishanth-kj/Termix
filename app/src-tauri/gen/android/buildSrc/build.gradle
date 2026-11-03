@@ -1,0 +1,27 @@
+plugins {
+    id 'java-gradle-plugin'
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+gradlePlugin {
+    plugins {
+        rust {
+            id = 'rust'
+            implementationClass = 'RustPlugin'
+        }
+    }
+}
+
+repositories {
+    google()
+    mavenCentral()
+}
+
+dependencies {
+    compileOnly gradleApi()
+    implementation 'com.android.tools.build:gradle:8.11.0'
+}

@@ -1,107 +1,138 @@
-use std::time::Duration;
+//! Credentials, connection, and the errors the window knows how to handle.
 
-use termix_automation::prepare;
-use termix_core::Protocol;
-use termix_logging::redact;
-use termix_security::Vault;
-use termix_ssh::{Auth, ConnectRequest, SshError, SshSession};
-use termix_storage::{data_dir, Database};
+use serde::{Deserialize, Serialize};
+use termix_core::Machine;
+use termix_session::{SessionError, Workspace};
+use termix_ssh::{Auth, SshError, SshSession};
 
-#[derive(serde::Serialize)]
-pub struct CommandOutput {
-    pub stdout: String,
-    pub stderr: String,
-    pub exit_code: Option<u32>,
+/// What the window sent for one action. Nothing here is stored unless
+/// `remember` is set, and then only encrypted, after the login has succeeded.
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Credentials {
+    pub password: Option<String>,
+    pub key_path: Option<String>,
+    pub key_passphrase: Option<String>,
+    pub remember: bool,
 }
 
-pub fn load(db: &Database, id_or_name: &str) -> Result<termix_core::Machine, String> {
-    db.resolve(id_or_name).map_err(|error| error.to_string())
+/// Errors the window reacts to, not just displays. `HostKeyUnknown` carries the
+/// fingerprint so the person can compare it before it is sent back to be pinned.
+#[derive(Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AppError {
+    HostKeyUnknown {
+        message: String,
+        algorithm: String,
+        fingerprint: String,
+    },
+    HostKeyChanged {
+        message: String,
+    },
+    NeedsConfirmation {
+        message: String,
+    },
+    /// Nothing to sign in with, or `failed` when the server refused what was tried.
+    NeedsCredentials {
+        message: String,
+        failed: bool,
+    },
+    Other {
+        message: String,
+    },
 }
 
-pub async fn run(
-    db: &Database,
-    id: &str,
-    command: &str,
-    password: &str,
-    trust: bool,
-    yes: bool,
-) -> Result<CommandOutput, String> {
-    let prepared = prepare(command, yes)
-        .map_err(|_| "this command looks destructive; confirm it before running".to_string())?;
-    if password.is_empty() {
-        return Err("password is empty".into());
-    }
-    let machine = load(db, id)?;
-    if machine.protocol != Protocol::Ssh && machine.protocol != Protocol::Sftp {
-        return Err(format!("{} is not an SSH machine", machine.protocol));
-    }
-    let session = connect(db, &machine, trust, password).await?;
-    let result = session
-        .exec(&prepared.body)
-        .await
-        .map_err(|error| error.to_string())?;
-    db.log(Some(machine.id), "exec", &redact(&prepared.body))
-        .map_err(|error| error.to_string())?;
-    db.mark_connected(machine.id)
-        .map_err(|error| error.to_string())?;
-    Ok(CommandOutput {
-        stdout: result.stdout,
-        stderr: result.stderr,
-        exit_code: result.exit_code,
-    })
-}
-
-async fn connect(
-    db: &Database,
-    machine: &termix_core::Machine,
-    trust: bool,
-    password: &str,
-) -> Result<SshSession, String> {
-    let _vault = open_vault()?;
-    let trusted = db
-        .trusted_fingerprint(&machine.host, machine.port)
-        .map_err(|error| error.to_string())?;
-    let request = |fingerprint: Option<String>| ConnectRequest {
-        host: machine.host.clone(),
-        port: machine.port,
-        username: machine.username.clone(),
-        auth: Auth::Password(password.to_string()),
-        trusted_fingerprint: fingerprint,
-        timeout: Duration::from_secs(15),
-        jump_host: None,
-    };
-    match SshSession::connect(request(trusted.clone())).await {
-        Ok(session) => Ok(session),
-        Err(SshError::HostKeyUnknown {
-            algorithm,
-            fingerprint,
-            ..
-        }) if trust && trusted.is_none() => {
-            db.trust_host(&machine.host, machine.port, &algorithm, &fingerprint)
-                .map_err(|error| error.to_string())?;
-            SshSession::connect(request(Some(fingerprint)))
-                .await
-                .map_err(|error| error.to_string())
+impl AppError {
+    pub fn other(message: impl ToString) -> Self {
+        Self::Other {
+            message: message.to_string(),
         }
-        Err(SshError::HostKeyUnknown {
-            algorithm,
-            fingerprint,
-            host,
-            port,
-        }) => Err(format!(
-            "host key is not trusted for {host}:{port}: {algorithm} {fingerprint}"
-        )),
-        Err(error) => Err(error.to_string()),
     }
 }
 
-fn open_vault() -> Result<Vault, String> {
-    let path = data_dir().join("master.key");
-    if path.exists() {
-        termix_security::load_key_file(&path).map_err(|error| error.to_string())
-    } else {
-        let vault = Vault::generate();
-        termix_security::store_key_file(&path, &vault).map_err(|error| error.to_string())?;
-        Ok(vault)
+impl From<SessionError> for AppError {
+    fn from(error: SessionError) -> Self {
+        let message = error.to_string();
+        match error {
+            SessionError::Ssh(SshError::HostKeyUnknown {
+                algorithm,
+                fingerprint,
+                ..
+            }) => Self::HostKeyUnknown {
+                message,
+                algorithm,
+                fingerprint,
+            },
+            SessionError::Ssh(SshError::HostKeyMismatch { .. })
+            | SessionError::AlreadyPinned { .. } => Self::HostKeyChanged { message },
+            SessionError::NeedsConfirmation => Self::NeedsConfirmation { message },
+            SessionError::NoCredentials(_) => Self::NeedsCredentials {
+                message,
+                failed: false,
+            },
+            SessionError::Ssh(SshError::AuthFailed) => Self::NeedsCredentials {
+                message,
+                failed: true,
+            },
+            _ => Self::Other { message },
+        }
+    }
+}
+
+pub fn resolve_auth(
+    workspace: &Workspace,
+    machine: &Machine,
+    credentials: &Credentials,
+) -> Result<Auth, AppError> {
+    if let Some(path) = credentials
+        .key_path
+        .as_deref()
+        .filter(|path| !path.is_empty())
+    {
+        return Ok(Auth::PrivateKey {
+            path: path.into(),
+            passphrase: credentials
+                .key_passphrase
+                .clone()
+                .filter(|passphrase| !passphrase.is_empty()),
+        });
+    }
+    match credentials
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+    {
+        Some(password) => Ok(Auth::Password(password.to_string())),
+        None => Ok(workspace.saved_auth(machine)?),
+    }
+}
+
+pub async fn connect(
+    workspace: &Workspace,
+    machine: &Machine,
+    credentials: &Credentials,
+    trust: Option<&str>,
+) -> Result<SshSession, AppError> {
+    let auth = resolve_auth(workspace, machine, credentials)?;
+    let session = workspace.connect(machine, auth, trust).await?;
+    remember_if_asked(workspace, machine, credentials)?;
+    Ok(session)
+}
+
+pub fn remember_if_asked(
+    workspace: &Workspace,
+    machine: &Machine,
+    credentials: &Credentials,
+) -> Result<(), AppError> {
+    if !credentials.remember {
+        return Ok(());
+    }
+    match credentials
+        .password
+        .as_deref()
+        .filter(|password| !password.is_empty())
+    {
+        Some(password) => Ok(workspace.remember_password(machine, password)?),
+        None => Ok(()),
     }
 }

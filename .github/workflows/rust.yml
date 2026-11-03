@@ -1,18 +1,68 @@
-name: Rust
+name: CI
 on:
   push:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Linux webview libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libayatana-appindicator3-dev
+      - name: NASM for aws-lc
+        if: runner.os == 'Windows'
+        uses: ilammy/setup-nasm@v1
+      - name: Type-check and build the UI
+        run: npm ci && npm run build
+        working-directory: app
       - name: Format
         run: cargo fmt --all --check
+      - name: Clippy, including the app
+        run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
-        run: cargo test --workspace --exclude termix-app
-      - name: Clippy
-        run: cargo clippy --workspace --exclude termix-app --all-targets -- -D warnings
+        run: cargo test --workspace
+
+  end-to-end:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: ilammy/setup-nasm@v1
+      - name: Build the UI with test hooks
+        run: npm ci && npm run build:e2e
+        working-directory: app
+      - run: cargo build -p termix-cli -p termix-app
+      - run: cargo build -p termix-session --example test_server
+      - name: Drive the real window
+        run: node scripts/e2e-windows.mts screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: screenshots
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - run: npm audit --audit-level=high
+        working-directory: app

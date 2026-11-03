@@ -1,10 +1,12 @@
 # Architecture
 
 ```
-Tauri shell (Windows, macOS, iOS, Android)
+Tauri app with a TypeScript UI (Windows, macOS, Linux, iOS, Android)
         |
         v
 termix-cli / termix-ffi
+        |
+termix-session (trust, credentials, commands, metrics, sync)
         |
         +-- termix-ssh ------ russh
         +-- termix-sftp ----- russh-sftp
