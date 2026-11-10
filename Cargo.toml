@@ -63,7 +63,7 @@ rand = "0.8"
 zeroize = { version = "1", features = ["derive"] }
 rusqlite = { version = "0.41", features = ["bundled"] }
 base64 = "0.22"
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 bytes = "1"
 clap = { version = "4", features = ["derive"] }
