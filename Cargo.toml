@@ -70,4 +70,4 @@ clap = { version = "4", features = ["derive"] }
 sysinfo = "0.40"
 directories = "6"
 libc = "0.2"
-vte = "0.13"
+vte = "0.15"
